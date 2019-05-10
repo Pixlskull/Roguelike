@@ -93,9 +93,7 @@ class Vector {
 class Coordinate extends Vector {
     //Used for the rooms in the labyrinth
     constructor(x = -1, y = -1) {
-        super();
-        this.x = x;
-        this.y = y;
+        super(x, y);
     }
     static cabDistance(coord1, coord2) {
         return Math.abs(coord2.x - coord1.x) + Math.abs(coord2.y - coord1.y)
@@ -136,9 +134,9 @@ class Coordinate extends Vector {
 
 }
 class Circle {
-    constructor() {
-        this.x = null;
-        this.y = null;
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
         this.xVelocity = 0;
         this.yVelocity = 0;
         this.direction = 0;
@@ -146,10 +144,10 @@ class Circle {
         this.color = "black";
         this.wallCollisionBehavior = {};
         //Default behavior of a circle when hitting a wall is to just prevent furthur movement in that direction
-        this.wallCollisionBehavior[Direction.LEFT] = function(){this.xVelocity = 0; this.x = 0 + this.radius;};
-        this.wallCollisionBehavior[Direction.RIGHT] = function(){this.xVelocity = 0; this.x = gameMap.width - this.radius;};
-        this.wallCollisionBehavior[Direction.UP] = function(){this.yVelocity = 0; this.y = 0 + this.radius;};
-        this.wallCollisionBehavior[Direction.DOWN] = function(){this.yVelocity = 0; this.y = gameMap.height - this.radius;};
+        this.wallCollisionBehavior[Direction.LEFT] = function(){this.xVelocity = 0; this.x = gameMap.x + this.radius;};
+        this.wallCollisionBehavior[Direction.RIGHT] = function(){this.xVelocity = 0; this.x = gameMap.x + gameMap.width - this.radius;};
+        this.wallCollisionBehavior[Direction.UP] = function(){this.yVelocity = 0; this.y = gameMap.y + this.radius;};
+        this.wallCollisionBehavior[Direction.DOWN] = function(){this.yVelocity = 0; this.y = gameMap.y + gameMap.height - this.radius;};
     }
     get area() {
         return Math.PI * this.radius ** 2;
@@ -158,50 +156,32 @@ class Circle {
         this.x += this.xVelocity;
         this.y += this.yVelocity;
         this.wallCollisionCheck();
-    //     if (this.x - this.radius < 0) {
-    //         this.xVelocity = 0;
-    //         this.x = 0 + this.radius;
-    //     }
-    //     else if (this.x + this.radius > gameMap.width) {
-    //         this.xVelocity = 0;
-    //         this.x = gameMap.width - this.radius;
-    //     }
-
-    //     if (this.y - this.radius < 0) {
-    //         this.yVelocity = 0;
-    //         this.y = 0 + this.radius;
-    //     }
-    //     else if (this.y + this.radius > gameMap.height) {
-    //         this.yVelocity = 0;
-    //         this.y = gameMap.height - this.radius;
-    //     }
     }
     draw() {
         const drawRange = 200;
         const drawX = this.x - camera.getX();
         const drawY = this.y - camera.getY();
-        //The if statement is just there in case there are no walls on the game map
-        if (drawX < gameMap.width + drawRange && drawX > 0 - drawRange &&
-            drawY < gameMap.height + drawRange && drawY > 0 - drawRange
-        ) {
-            ctx.strokeStyle = "color";
-            ctx.beginPath();
-            ctx.arc(drawX, drawY, this.radius, 0, Math.PI * 2, true);
-            ctx.stroke();
-        }
+        // //The if statement is just there in case there are no walls on the game map
+        // if (drawX < gameMap.width + drawRange && drawX > 0 - drawRange &&
+        //     drawY < gameMap.height + drawRange && drawY > 0 - drawRange
+        // ) {
+        ctx.strokeStyle = "color";
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, this.radius, 0, Math.PI * 2, true);
+        ctx.stroke();
     }
     wallCollisionCheck(){
         //Runs a function when a circle hits a wall
-        if (this.x - this.radius < 0) {
+        if (this.x - this.radius < gameMap.x) {
             this.wallCollisionBehavior[Direction.LEFT].bind(this)();
         }
-        else if (this.x + this.radius > gameMap.width) {
+        else if (this.x + this.radius > gameMap.width + gameMap.x) {
             this.wallCollisionBehavior[Direction.RIGHT].bind(this)();
         }
-        if (this.y - this.radius < 0) {
+        if (this.y - this.radius < gameMap.y) {
             this.wallCollisionBehavior[Direction.UP].bind(this)();
         }
-        else if (this.y + this.radius > gameMap.height) {
+        else if (this.y + this.radius > gameMap.height + gameMap.y) {
             this.wallCollisionBehavior[Direction.DOWN].bind(this)();
         }
     }
@@ -213,12 +193,6 @@ class StaticCircle extends Circle {
         this.x = randomNum(0, gameMap.width);
         this.y = randomNum(0, gameMap.height);
         this.radius = randomNum(1, 15);
-    }
-    update() {
-        super.update();
-    }
-    draw() {
-        super.draw();
     }
 }
 
@@ -233,31 +207,41 @@ class RandomCircle extends Circle {
         this.xVelocity = vector.xVelocity;
         this.yVelocity = vector.yVelocity;
     }
-
-    update() {
-        super.update();
-    }
-
-    draw() {
-        super.draw();
-    }
-
 }
 class Enemy extends Circle {
     //Base enemy class, contains all the functions
     constructor(x, y, hp){
-        super();
-        this.x = x;
-        this.y = y;
+        super(x, y);
         this.hp = hp;
         this.bulletCycleTime = 1000;
         this.lastBulletCycle = new Date();
         this.behavior = this.keepDistance;
+        this.bulletBehavior = this.basicShoot;
+        this.behaviorParam = [];
+        this.bulletBehaviorParam = [];
         this.faction = Faction.ENEMY;
         this.radius = 10;
-        this.idleSpeedVector = new Vector(2,2);
+        this.alive = true;
+    }
+    static get faction(){
+        return Faction.ENEMY;
+    }
+    static get scoreObjectList(){
+        const enemyScoreList = [];
+        for (const enemy of GlobalEnemyList){
+            enemyScoreList.push(new EnemyScore(enemy));
+        }
+        return enemyScoreList;
+    }
+    static get scoreList(){
+        return this.scoreObjectList.map(object => object.enemyScore);
     }
     update(){
+        if (this.hp <= 0){
+            this.alive = false;
+        }
+        this.behavior.apply(this, this.behaviorParam);
+        this.bulletBehavior.apply(this, this.bulletBehaviorParam);
         super.update();
     }
     draw(){
@@ -268,9 +252,9 @@ class Enemy extends Circle {
         this.xVelocity = (Math.random() - 0.5) * this.idleSpeedVector.x;
         this.yVelocity = (Math.random() - 0.5) * this.idleSpeedVector.y;
     }
-    chase(){
+    chase(speed){
         //Moves the enemy towards the player
-        const chaseSpeed = 3;
+        const chaseSpeed = speed;
         const chaseDistX = player.x - this.x;
         const chaseDistY = player.y - this.y;
         const chaseVector = new Vector(chaseDistX, chaseDistY);
@@ -281,7 +265,7 @@ class Enemy extends Circle {
         this.xVelocity = clamp(chaseVector.unit().x * chaseSpeed, -Math.abs(chaseDistX), Math.abs(chaseDistX));
         this.yVelocity = clamp(chaseVector.unit().y * chaseSpeed, -Math.abs(chaseDistY), Math.abs(chaseDistY));
     }
-    keepDistance(dist){
+    keepDistance(speed, dist){
         //Same as chase, but the enemy will stop moving if it gets within a certain distance from the player
         const chaseSpeed = 3;
         const chaseDistX = player.x - this.x;
@@ -301,10 +285,10 @@ class Enemy extends Circle {
     noMovement(){
         //intentionally left blank
     }
-    basicShoot(){
+    basicShoot(damage, speed, lifetime, radius){
         const currentTime = new Date();
         if (currentTime - this.lastBulletCycle > this.bulletCycleTime){
-            labyrinth.createBullet(new BasicBullet(this.x, this.y, player, 10, this.faction));
+            labyrinth.createBullet(new BasicBullet(this.x, this.y, player, damage, speed, lifetime, radius, this));
             this.lastBulletCycle = new Date();
         }
     }
@@ -313,12 +297,12 @@ class Enemy extends Circle {
         const currentTime = new Date();
         if (currentTime - this.lastBulletCycle > this.bulletCycleTime){
             for (let j = 0; j < bulletCount; j ++){
-                labyrinth.createBullet(new AngleBullet(this.x, this.y, j * (2 * Math.PI / bulletCount), 5, this.faction));
+                labyrinth.createBullet(new AngleBullet(this.x, this.y, j * (2 * Math.PI / bulletCount), 10, this));
             }
             this.lastBulletCycle = new Date();
         }
     }
-    multiShotAimed(bulletCount, spread){
+    multiShotAimed(bulletCount, spread, speed){
         //Shoots a spread of bullets with the center aimed at the player
         //If an even amount of bullets is shot, no bullet will be on a direct collision course with the player
         const currentTime = new Date();
@@ -326,44 +310,53 @@ class Enemy extends Circle {
             const spreadRad = spread * Math.PI / 180;
             const playerAngle = Math.atan2(player.y - this.y, player.x - this.x);
             for (let j = 0; j < bulletCount; j ++){
-                labyrinth.createBullet(new AngleBullet(this.x, this.y, playerAngle + spreadRad * (j - (bulletCount-1)/2), 10, this.faction));
+                labyrinth.createBullet(new AngleBullet(this.x, this.y, playerAngle + spreadRad * (j - (bulletCount-1)/2), 5, speed, 7000/2, 10, this));
             }
             this.lastBulletCycle = new Date();
         }
     }
 }
+class Zombie extends Enemy{
+    constructor(x, y, hpMod, damageMod, speedMod){
+        super(x, y, 10, hpMod);
+        this.bulletCycleTime = 500;
+        this.behavior = this.chase;
+        this.behaviorParam = [2];
+        this.bulletBehavior = this.basicShoot;
+        this.bulletBehaviorParam = [5, 3, 10000, 10];
+        this.radius = 10;
+        
+    }
+    static get score(){
+        return 1;
+    }
+}
 class Sentry extends Enemy{
     //Stays still and shoots a spread of bullets at the player
-    constructor(x, y, hp){
-        super();
-        this.x = x;
-        this.y = y;
-        this.hp = hp;
+    constructor(x, y, hpMod){
+        super(x, y, 20, hpMod);
         this.bulletCycleTime = 1000;
-        this.lastBulletCycle = new Date();
         this.behavior = this.noMovement;
+        this.bulletBehavior = this.multiShotAimed;
+        this.bulletBehaviorParam = [3,15, 2];
         this.radius = 10;
     }
-    update(){
-        this.behavior();
-        this.multiShotAimed(7, 15);
-        super.update();
-    }
-    draw(){
-        super.draw();
+    static get score(){
+        return 2;
     }
 }
 class Bullet extends Circle{
     //Base class for bullets
-    constructor(x, y, xVelocity, yVelocity, damage, lifetime, radius){
-        super();
-        this.x = x;
-        this.y = y;
+    constructor(x, y, xVelocity, yVelocity, damage, speed, lifetime, radius, creator){
+        super(x, y);
         this.xVelocity = xVelocity;
         this.yVelocity = yVelocity;
         this.damage = damage;
+        this.speed = speed;
         this.lifetime = lifetime;
         this.radius = radius;
+        this.creator = creator;
+        this.faction = creator.constructor.faction;
         this.lifeStart = new Date();
         this.behavior = this.linear;
         this.alive = true;
@@ -392,27 +385,21 @@ class Bullet extends Circle{
         this.wallCollisionBehavior[Direction.DOWN] = mapBorderCheckCallback;
     }
     collisionCheck(object){
+
         if ((this.x - object.x)**2 + (this.y - object.y)**2 <= (this.radius + object.radius)**2 &&
             (this.faction != object.faction))
         {
             object.hp -= this.damage;
+            object.lastHit = this.creator.constructor.name;
             this.alive = false;
-            console.log("player hit");
         }
     }
 }
 class BasicBullet extends Bullet{
     //Uses a vector/anything with an x and y value for targeting. 
-    constructor(x, y, target, speed, faction){
-        super();
-        this.x = x;
-        this.y = y;
+    constructor(x, y, target, damage, speed, lifetime, radius, creator){
+        super(x, y, 0, 0, damage, speed, lifetime, radius, creator);
         this.target = target;
-        this.speed = speed;
-        this.damage = 5;
-        this.lifetime = 1000;
-        this.faction = faction;
-        this.radius = 10;
         this.calculateVelocity();
     }
     calculateVelocity(){
@@ -422,7 +409,6 @@ class BasicBullet extends Bullet{
         }
         this.xVelocity = targetVector.unit().x * this.speed;
         this.yVelocity = targetVector.unit().y * this.speed;
-
     }
     update(){
         super.update();
@@ -433,16 +419,10 @@ class BasicBullet extends Bullet{
 }
 class AngleBullet extends Bullet{
     //Uses an angle in radians for targeting
-    constructor(x, y, angle, speed, faction){
-        super();
-        this.x = x;
-        this.y = y;
-        this.speed = speed;
+    constructor(x, y, angle, damage, speed, lifetime, radius, creator){
+        super(x, y, 0, 0, damage, speed, lifetime, radius, creator);
         this.angle = angle;
-        this.damage = 5;
-        this.lifetime = 7000/speed;
-        this.faction = faction;
-        this.radius = 10;
+        this.faction = creator.constructor.faction;
         this.calculateVelocity();
     }
     calculateVelocity(){
@@ -455,9 +435,9 @@ class AngleBullet extends Bullet{
 }
 class Player extends Circle {
     constructor() {
-        super();
-        this.x = gameMap.width / 2;
-        this.y = gameMap.height / 2;
+        super(0, 0);
+        this.x = (gameMap.width + gameMap.x)/ 2;
+        this.y = (gameMap.height + gameMap.y)/ 2;
         this.xVelocityTop = gameMap.width / 150;
         this.yVelocityTop = gameMap.height / 150;
         this.hp = 100;
@@ -465,19 +445,36 @@ class Player extends Circle {
         this.lastX = 0;
         this.lastY = 0;
         this.usedExit = false;
+        this.bulletCycleTime = 10;
+        this.lastBulletCycle = new Date();
+        this.alive = true;
     }
-
+    static get faction(){
+        return Faction.PLAYER;
+    }
     update() {
+        if (this.hp <= 0){
+            console.log("dead");
+            labyrinth.playerAlive = false;
+        }
         const inputVector = controller.getNormalizeInput();
         this.xVelocity = inputVector.x * this.xVelocityTop;
         this.yVelocity = inputVector.y * this.yVelocityTop;
         super.update();
+        if(controller.mouse === true){
+            this.shoot();
+        }
     }
 
     draw() {
         super.draw();
     }
-
+    shoot(){
+        if (new Date() - this.lastBulletCycle > this.bulletCycleTime){
+            labyrinth.createBullet(new BasicBullet(this.x, this.y, getMousePos(canvas, controller.e), 1, 5, 7000/2, 10, this));
+            this.lastBulletCycle = new Date();
+        }
+    }
     load(exit){
         switch(exit.direction){
             //temporary solution
@@ -503,22 +500,34 @@ class GameMap {
     //This is used in case the moveable area is less than the size of the canvas
     //Isn't functioning yet
     constructor() {
-        this.x;
-        this.y;
+        this.x = 0;
+        this.y = 0;
         this.width = 600;
         this.height = 600;
+        this.xCenter = (this.width + this.x)/2;
+        this.yCenter = (this.height + this.y)/2;
     }
 
 }
+
 class Labyrinth {
     constructor() {
         this.roomMap = {};
         this.roomCount = 0;
         this.activeRoom = 0;
+        this.initBool = false;
+        this.playerAlive = true;
         this.createRoom(new Coordinate(0, 0));
     }
+    init(){
+        this.roomMap[this.activeRoom].init();
+    }
     update() {
-        this.roomMap[this.activeRoom].update();
+        if (!this.initBool){
+            this.init();
+            this.initBool = true;
+        }
+        (!this.playerAlive) ? this.roomMap[this.activeRoom].deadUpdate() : this.roomMap[this.activeRoom].update()
     }
     draw() {
         this.roomMap[this.activeRoom].draw();
@@ -554,8 +563,9 @@ class Labyrinth {
         }
         return null;
     }
-    generateRoom(exit) {
+    moveToRoom(exit) {
         //Uses the coordinates specified by the exit to create a new room
+        //Also moves the player to that room
         if (this.hasRoom(exit.exitCoord)) {
             this.activeRoom = labyrinth.getRoom(exit.exitCoord).number;
         }
@@ -564,9 +574,9 @@ class Labyrinth {
             this.activeRoom = this.roomCount - 1;
         }
         player.load(exit);
+        this.initBool = false;
     }
 }
-
 class Room {
     constructor(number, coordinate) {
         this.number = number;
@@ -576,10 +586,14 @@ class Room {
         this.exitHeightRatio = 0.02;
         this.enemyList = [];
         this.bulletList = [];
+        this.enemyGeneration();
+        this.enemyList.push(player);
         this.createFourExits();
         this.createExitDimensions();
-        this.enemyList.push(player);
-        this.createEnemy(new Sentry(300, 300, 10, BasicBullet));
+    }
+    init(){
+        this.bulletList = [];
+        this.enemyList.map(enemy => enemy.lastBulletCycle = new Date());
     }
     update() {
         this.playerExitCheck();
@@ -591,14 +605,67 @@ class Room {
         this.bulletDraw();
         this.drawExits();
         this.enemyDraw();
+        this.deadDraw();      
+    }
+    deadUpdate(){
         
-        
+    }
+    deadDraw(){
+        if(!labyrinth.playerAlive){
+            ctx.font = "32px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("You were killed by " + player.lastHit, gameMap.xCenter, gameMap.yCenter);
+        }
+        ctx.font = "10px sans-serif";
+    }
+    enemyGeneration(){
+        let roomScore = Math.floor(this.number * Math.sqrt(this.number));
+        const maxScore = 1000;
+        const maxEnemyCount = 10;
+        let enemyConstructorList = [];
+        let enemyList = [];
+        const currentMaxScore = Math.min(roomScore, maxScore)
+        let enemyTotalScore = Math.ceil(0.5 * currentMaxScore + Math.random() * currentMaxScore);
+        roomScore -= enemyTotalScore;
+        while (enemyList.length < maxEnemyCount + 1 && enemyTotalScore > 0){
+            //Randomly creates enemies
+            let scoreRoll = Math.ceil(currentMaxScore * (Math.random() ** ((enemyConstructorList.length + 1)/2)));
+            //The exponent increases the likelyhood of selecting a stronger enemy for the first 3 enemies
+            //After 4 enemies, there is a greater chance of selecting a weaker enemy
+            let enemyScoreRoll = Enemy.scoreList.reduce(function (prev, curr) {
+                return (Math.abs(curr - scoreRoll) < Math.abs(prev - scoreRoll) ? curr : prev);
+            });
+            enemyTotalScore -= enemyScoreRoll;
+            const potentialEnemyList = [];
+            for (const score of Enemy.scoreObjectList){
+                if (score.enemyScore === enemyScoreRoll){
+                    potentialEnemyList.push(score.enemyConstructor);
+                }
+            }
+            if(potentialEnemyList.length === 0){
+                throw "Found No Potential Enemies";
+            }
+            enemyConstructorList.push(potentialEnemyList[Math.floor(Math.random() * potentialEnemyList.length)]);
+        }
+        roomScore += enemyTotalScore;
+        const bulletBuff = 0;
+        roomScore -= bulletBuff;
+        const hpModifier = 1 + roomScore / 1000;
+        for (let enemyConstructor of enemyConstructorList){
+            enemyList.push(new enemyConstructor(
+                uniDistribution(gameMap.xCenter, gameMap.width/24), 
+                uniDistribution(gameMap.yCenter, gameMap.height/24), 
+                hpModifier
+            ));
+        }
+        this.enemyList = enemyList;
     }
     createEnemy(enemy){
         this.enemyList.push(enemy);
     }
     enemyUpdate(){
         this.enemyList.map(enemy => enemy.update());
+        this.enemyList = this.findLiving(this.enemyList);
     }
     enemyDraw(){
         this.enemyList.map(enemy => enemy.draw());
@@ -623,45 +690,6 @@ class Room {
         }
         return livingList;
     }
-    createFourExits() {
-        for (const direction in Direction) {
-            this.exitMap[Direction[direction]] = new Exit(Direction[direction], this.coordinate);
-        }
-    }
-    createExitDimensions() {
-        const wRatio = this.exitWidthRatio;
-        const hRatio = this.exitHeightRatio;
-        for (const exit in this.exitMap) {
-            switch (this.exitMap[exit].direction) {
-                case "right":
-                    this.exitMap[exit].x = gameMap.width - gameMap.width * hRatio;
-                    this.exitMap[exit].y = gameMap.height / 2 - gameMap.height * wRatio / 2;
-                    this.exitMap[exit].width = gameMap.width * hRatio;
-                    this.exitMap[exit].height = gameMap.height * wRatio;
-                    break;
-                case "left":
-                    this.exitMap[exit].x = 0;
-                    this.exitMap[exit].y = gameMap.height / 2 - gameMap.height * wRatio / 2;
-                    this.exitMap[exit].width = gameMap.width * hRatio;
-                    this.exitMap[exit].height = gameMap.height * wRatio;
-                    break;
-                case "up":
-                    this.exitMap[exit].x = gameMap.width / 2 - gameMap.width * wRatio / 2;
-                    this.exitMap[exit].y = 0;
-                    this.exitMap[exit].width = gameMap.width * wRatio;
-                    this.exitMap[exit].height = gameMap.height * hRatio;
-                    break;
-                case "down":
-                    this.exitMap[exit].x = gameMap.width / 2 - gameMap.width * wRatio / 2;
-                    this.exitMap[exit].y = gameMap.height - gameMap.height * hRatio;
-                    this.exitMap[exit].width = gameMap.width * wRatio;
-                    this.exitMap[exit].height = gameMap.height * hRatio;
-                    break;
-                default:
-                    throw "No exit direction given";
-            }
-        }
-    }
     drawExits() {
         ctx.strokeStyle = "blue";
         for (const exit in this.exitMap) {
@@ -676,7 +704,7 @@ class Room {
         //temporary
         ctx.strokeStyle = "black";
         const text = this.coordinate.x + " , " + this.coordinate.y;
-        ctx.fillText(text, gameMap.width/2, gameMap.height/2);
+        ctx.fillText(text, gameMap.xCenter, gameMap.yCenter);
         ctx.stroke();
     }
     playerExitCheck() {
@@ -686,7 +714,7 @@ class Room {
             for (const exit in this.exitMap) {
                 if (this.exitMap[exit].containsPoint(player)) {
                     player.usedExit = true;
-                    labyrinth.generateRoom(this.exitMap[exit]);
+                    labyrinth.moveToRoom(this.exitMap[exit]);
                     break;      
                 }
             }
@@ -703,7 +731,45 @@ class Room {
                 player.usedExit = false;
             }
         }
-
+    }
+    createFourExits() {
+        for (const direction in Direction) {
+            this.exitMap[Direction[direction]] = new Exit(Direction[direction], this.coordinate);
+        }
+    }
+    createExitDimensions() {
+        const wRatio = this.exitWidthRatio;
+        const hRatio = this.exitHeightRatio;
+        for (const exit in this.exitMap) {
+            switch (this.exitMap[exit].direction) {
+                case "right":
+                    this.exitMap[exit].x = gameMap.width + gameMap.x - gameMap.width * hRatio;
+                    this.exitMap[exit].y = gameMap.yCenter - gameMap.height * wRatio / 2;
+                    this.exitMap[exit].width = gameMap.width * hRatio;
+                    this.exitMap[exit].height = gameMap.height * wRatio;
+                    break;
+                case "left":
+                    this.exitMap[exit].x = gameMap.x;
+                    this.exitMap[exit].y = gameMap.yCenter - gameMap.height * wRatio / 2;
+                    this.exitMap[exit].width = gameMap.width * hRatio;
+                    this.exitMap[exit].height = gameMap.height * wRatio;
+                    break;
+                case "up":
+                    this.exitMap[exit].x = gameMap.xCenter - gameMap.width * wRatio / 2;
+                    this.exitMap[exit].y = gameMap.y;
+                    this.exitMap[exit].width = gameMap.width * wRatio;
+                    this.exitMap[exit].height = gameMap.height * hRatio;
+                    break;
+                case "down":
+                    this.exitMap[exit].x = gameMap.xCenter - gameMap.width * wRatio / 2;
+                    this.exitMap[exit].y = gameMap.height - gameMap.height * hRatio;
+                    this.exitMap[exit].width = gameMap.width * wRatio;
+                    this.exitMap[exit].height = gameMap.height * hRatio;
+                    break;
+                default:
+                    throw "No exit direction given";
+            }
+        }
     }
 }
 class Exit {
@@ -745,6 +811,7 @@ class Controller {
         this.right = false;
         this.up = false;
         this.down = false;
+        this.mouse = false;
         this.xVelocity = 0;
         this.yVelocity = 0;
     }
@@ -803,6 +870,12 @@ class Camera {
     }
 }
 
+class EnemyScore{
+    constructor(enemyConstructor){
+        this.enemyConstructor = enemyConstructor;
+        this.enemyScore = enemyConstructor.score;
+    }
+}
 
 function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -825,23 +898,31 @@ function rollSpeed(min, max) {
         };
     }
 }
-
+function uniDistribution(center, spread){
+    return center + spread * 2 * (Math.random() - 0.5);
+}
 function clamp(value, min, max) {
     return Math.max(min, Math.min(value, max));
 }
-
+function getMousePos(canvas, evt) {
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: evt.clientX - rect.left,
+      y: evt.clientY - rect.top
+    };
+}
 function keyDownCheck(e) {
     switch (e.key) {
-        case "ArrowLeft":
+        case "a":
             controller.left = true;
             break;
-        case "ArrowRight":
+        case "d":
             controller.right = true;
             break;
-        case "ArrowUp":
+        case "w":
             controller.up = true;
             break;
-        case "ArrowDown":
+        case "s":
             controller.down = true;
             break;
     }
@@ -849,19 +930,26 @@ function keyDownCheck(e) {
 
 function keyUpCheck(e) {
     switch (e.key) {
-        case "ArrowLeft":
+        case "a":
             controller.left = false;
             break;
-        case "ArrowRight":
+        case "d":
             controller.right = false;
             break;
-        case "ArrowUp":
+        case "w":
             controller.up = false;
             break;
-        case "ArrowDown":
+        case "s":
             controller.down = false;
             break;
     }
+}
+function mouseDown(e){
+    controller.e = e;
+    controller.mouse = true;
+}
+function mouseUp(e){
+    controller.mouse = false;
 }
 let gameMap = new GameMap();
 const canvas = document.createElement("canvas");
@@ -872,7 +960,12 @@ const ctx = canvas.getContext("2d");
 document.body.appendChild(canvas);
 document.onkeydown = keyDownCheck;
 document.onkeyup = keyUpCheck;
-let game_objects = [];
+document.onmousedown = mouseDown;
+document.onmouseup = mouseUp;
+let GlobalEnemyList = [Zombie];
+//EnemyScores contains EnemyScore objects which has an enemy constructor and the score value of that enemy
+//EnemyScoreList just contains an array of enemyscores
+//Confusing, I know
 let player = new Player();
 let controller = new Controller();
 let camera = new Camera();
@@ -880,10 +973,8 @@ let labyrinth = new Labyrinth();
 function game_cycle() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     controller.update();
-    // player.update();
     labyrinth.update();
     camera.fixedUpdate(0, 0);
-    // player.draw();
     labyrinth.draw();
     requestAnimationFrame(game_cycle);
 }
