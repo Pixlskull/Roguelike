@@ -208,231 +208,6 @@ class RandomCircle extends Circle {
         this.yVelocity = vector.yVelocity;
     }
 }
-class Enemy extends Circle {
-    //Base enemy class, contains all the functions
-    constructor(x, y, hp){
-        super(x, y);
-        this.hp = hp;
-        this.bulletCycleTime = 1000;
-        this.lastBulletCycle = new Date();
-        this.behavior = this.keepDistance;
-        this.bulletBehavior = this.basicShoot;
-        this.behaviorParam = [];
-        this.bulletBehaviorParam = [];
-        this.faction = Faction.ENEMY;
-        this.radius = 10;
-        this.alive = true;
-    }
-    static get faction(){
-        return Faction.ENEMY;
-    }
-    static get scoreObjectList(){
-        const enemyScoreList = [];
-        for (const enemy of GlobalEnemyList){
-            enemyScoreList.push(new EnemyScore(enemy));
-        }
-        return enemyScoreList;
-    }
-    static get scoreList(){
-        return this.scoreObjectList.map(object => object.enemyScore);
-    }
-    update(){
-        if (this.hp <= 0){
-            this.alive = false;
-        }
-        this.behavior.apply(this, this.behaviorParam);
-        this.bulletBehavior.apply(this, this.bulletBehaviorParam);
-        super.update();
-    }
-    draw(){
-        super.draw();
-    }
-    idle(){
-        //Randomly jitters around
-        this.xVelocity = (Math.random() - 0.5) * this.idleSpeedVector.x;
-        this.yVelocity = (Math.random() - 0.5) * this.idleSpeedVector.y;
-    }
-    chase(speed){
-        //Moves the enemy towards the player
-        const chaseSpeed = speed;
-        const chaseDistX = player.x - this.x;
-        const chaseDistY = player.y - this.y;
-        const chaseVector = new Vector(chaseDistX, chaseDistY);
-        //The clamp function makes sure that the movement velocity is decreased 
-        //if the enemy is extremly close to the player
-        //Ex: if normally the chase velocity is 3, but the player is 2.5 pixels away, 
-        // the velocity would be set to 2.5
-        this.xVelocity = clamp(chaseVector.unit().x * chaseSpeed, -Math.abs(chaseDistX), Math.abs(chaseDistX));
-        this.yVelocity = clamp(chaseVector.unit().y * chaseSpeed, -Math.abs(chaseDistY), Math.abs(chaseDistY));
-    }
-    keepDistance(speed, dist){
-        //Same as chase, but the enemy will stop moving if it gets within a certain distance from the player
-        const chaseSpeed = 3;
-        const chaseDistX = player.x - this.x;
-        const chaseDistY = player.y - this.y;
-        const chaseVector = new Vector(chaseDistX, chaseDistY);
-        if (chaseVector.magnitude > dist){
-            const stableDistX = player.x - this.x - chaseVector.unit().x * dist;
-            const stableDistY = player.y - this.y - chaseVector.unit().y * dist;
-            this.xVelocity = clamp(chaseVector.unit().x * chaseSpeed, -Math.abs(stableDistX), Math.abs(stableDistX));
-            this.yVelocity = clamp(chaseVector.unit().y * chaseSpeed, -Math.abs(stableDistY), Math.abs(stableDistY));
-        }
-        else{
-            this.xVelocity = 0;
-            this.yVelocity = 0;
-        }
-    }
-    noMovement(){
-        //intentionally left blank
-    }
-    basicShoot(damage, speed, lifetime, radius){
-        const currentTime = new Date();
-        if (currentTime - this.lastBulletCycle > this.bulletCycleTime){
-            labyrinth.createBullet(new BasicBullet(this.x, this.y, player, damage, speed, lifetime, radius, this));
-            this.lastBulletCycle = new Date();
-        }
-    }
-    multiShotCircular(bulletCount){
-        //Shoots equally spaced circles around the enemy
-        const currentTime = new Date();
-        if (currentTime - this.lastBulletCycle > this.bulletCycleTime){
-            for (let j = 0; j < bulletCount; j ++){
-                labyrinth.createBullet(new AngleBullet(this.x, this.y, j * (2 * Math.PI / bulletCount), 10, this));
-            }
-            this.lastBulletCycle = new Date();
-        }
-    }
-    multiShotAimed(bulletCount, spread, speed){
-        //Shoots a spread of bullets with the center aimed at the player
-        //If an even amount of bullets is shot, no bullet will be on a direct collision course with the player
-        const currentTime = new Date();
-        if (currentTime - this.lastBulletCycle > this.bulletCycleTime){
-            const spreadRad = spread * Math.PI / 180;
-            const playerAngle = Math.atan2(player.y - this.y, player.x - this.x);
-            for (let j = 0; j < bulletCount; j ++){
-                labyrinth.createBullet(new AngleBullet(this.x, this.y, playerAngle + spreadRad * (j - (bulletCount-1)/2), 5, speed, 7000/2, 10, this));
-            }
-            this.lastBulletCycle = new Date();
-        }
-    }
-}
-class Zombie extends Enemy{
-    constructor(x, y, hpMod, damageMod, speedMod){
-        super(x, y, 10, hpMod);
-        this.bulletCycleTime = 500;
-        this.behavior = this.chase;
-        this.behaviorParam = [2];
-        this.bulletBehavior = this.basicShoot;
-        this.bulletBehaviorParam = [5, 3, 10000, 10];
-        this.radius = 10;
-        
-    }
-    static get score(){
-        return 1;
-    }
-}
-class Sentry extends Enemy{
-    //Stays still and shoots a spread of bullets at the player
-    constructor(x, y, hpMod){
-        super(x, y, 20, hpMod);
-        this.bulletCycleTime = 1000;
-        this.behavior = this.noMovement;
-        this.bulletBehavior = this.multiShotAimed;
-        this.bulletBehaviorParam = [3,15, 2];
-        this.radius = 10;
-    }
-    static get score(){
-        return 2;
-    }
-}
-class Bullet extends Circle{
-    //Base class for bullets
-    constructor(x, y, xVelocity, yVelocity, damage, speed, lifetime, radius, creator){
-        super(x, y);
-        this.xVelocity = xVelocity;
-        this.yVelocity = yVelocity;
-        this.damage = damage;
-        this.speed = speed;
-        this.lifetime = lifetime;
-        this.radius = radius;
-        this.creator = creator;
-        this.faction = creator.constructor.faction;
-        this.lifeStart = new Date();
-        this.behavior = this.linear;
-        this.alive = true;
-    }
-    update(){        
-        super.update();
-        this.behavior();
-        this.lifeDecay();
-    }
-    draw(){
-        super.draw();
-    }
-    lifeDecay(){
-        const currentTime = new Date();
-        if (currentTime - this.lifeStart > this.lifetime){
-            this.alive = false;
-        }
-    }
-    linear(){
-        function mapBorderCheckCallback(){
-            this.alive = false;
-        }
-        this.wallCollisionBehavior[Direction.LEFT] = mapBorderCheckCallback;
-        this.wallCollisionBehavior[Direction.RIGHT]= mapBorderCheckCallback;
-        this.wallCollisionBehavior[Direction.UP] = mapBorderCheckCallback;
-        this.wallCollisionBehavior[Direction.DOWN] = mapBorderCheckCallback;
-    }
-    collisionCheck(object){
-
-        if ((this.x - object.x)**2 + (this.y - object.y)**2 <= (this.radius + object.radius)**2 &&
-            (this.faction != object.faction))
-        {
-            object.hp -= this.damage;
-            object.lastHit = this.creator.constructor.name;
-            this.alive = false;
-        }
-    }
-}
-class BasicBullet extends Bullet{
-    //Uses a vector/anything with an x and y value for targeting. 
-    constructor(x, y, target, damage, speed, lifetime, radius, creator){
-        super(x, y, 0, 0, damage, speed, lifetime, radius, creator);
-        this.target = target;
-        this.calculateVelocity();
-    }
-    calculateVelocity(){
-        let targetVector = new Vector(this.target.x - this.x, this.target.y - this.y);
-        if (targetVector.magnitude === 0){
-            targetVector = new Vector(Math.random() - 0.5, Math.random() - 0.5);
-        }
-        this.xVelocity = targetVector.unit().x * this.speed;
-        this.yVelocity = targetVector.unit().y * this.speed;
-    }
-    update(){
-        super.update();
-    }
-    draw(){
-        super.draw();
-    }
-}
-class AngleBullet extends Bullet{
-    //Uses an angle in radians for targeting
-    constructor(x, y, angle, damage, speed, lifetime, radius, creator){
-        super(x, y, 0, 0, damage, speed, lifetime, radius, creator);
-        this.angle = angle;
-        this.faction = creator.constructor.faction;
-        this.calculateVelocity();
-    }
-    calculateVelocity(){
-        this.xVelocity = Math.cos(this.angle) * this.speed;
-        this.yVelocity = Math.sin(this.angle) * this.speed;
-    }
-    draw(){
-        super.draw();
-    }
-}
 class Player extends Circle {
     constructor() {
         super(0, 0);
@@ -440,12 +215,12 @@ class Player extends Circle {
         this.y = (gameMap.height + gameMap.y)/ 2;
         this.xVelocityTop = gameMap.width / 150;
         this.yVelocityTop = gameMap.height / 150;
-        this.hp = 100;
+        this.hp = 1000;
         this.faction = Faction.PLAYER;
         this.lastX = 0;
         this.lastY = 0;
         this.usedExit = false;
-        this.bulletCycleTime = 10;
+        this.bulletCycleTime = 250;
         this.lastBulletCycle = new Date();
         this.alive = true;
     }
@@ -495,6 +270,304 @@ class Player extends Circle {
         }
     }
 }
+class Enemy extends Circle {
+    //Base enemy class, contains all the functions
+    constructor(x, y, hp, hpMod){
+        super(x, y);
+        this.hp = hp * hpMod;
+        this.movementCycleTime = 100;
+        this.lastMovementCycle = new Date();
+        this.bulletCycleTime = 1000;
+        this.lastBulletCycle = new Date();
+        this.behavior = this.keepDistance;
+        this.bulletBehavior = this.basicShoot;
+        this.behaviorParam = [];
+        this.bulletBehaviorParam = [];
+        this.faction = Faction.ENEMY;
+        this.radius = 10;
+        this.alive = true;
+        this.idleSpeedVector = {x: 0, y: 0};
+        this.symbol = "e";
+    }
+    static get faction(){
+        return Faction.ENEMY;
+    }
+    static get scoreObjectList(){
+        const enemyScoreList = [];
+        for (const enemy of GlobalEnemyList){
+            enemyScoreList.push(new EnemyScore(enemy));
+        }
+        return enemyScoreList;
+    }
+    static get scoreList(){
+        return this.scoreObjectList.map(object => object.enemyScore);
+    }
+    update(){
+        if (this.hp <= 0){
+            this.alive = false;
+        }
+        const currentTime = new Date();
+        if (currentTime - this.lastMovementCycle > this.movementCycleTime){
+            this.behavior.apply(this, this.behaviorParam);
+            this.xVelocity +=  (Math.random()-0.5) * this.idleSpeedVector.x;
+            this.yVelocity +=  (Math.random()-0.5) * this.idleSpeedVector.y;
+            this.lastMovementCycle = new Date();
+        }
+        this.bulletBehavior.apply(this, this.bulletBehaviorParam);
+        super.update();
+    }
+    draw(){
+        super.draw();
+        ctx.strokeStyle = "black";
+        ctx.fillText(this.symbol, this.x, this.y);
+        ctx.stroke();
+    }
+    chase(speed){
+        //Moves the enemy towards the player
+        const chaseSpeed = speed;
+        const chaseDistX = player.x - this.x;
+        const chaseDistY = player.y - this.y;
+        const chaseVector = new Vector(chaseDistX, chaseDistY);
+        //The clamp function makes sure that the movement velocity is decreased 
+        //if the enemy is extremly close to the player
+        //Ex: if normally the chase velocity is 3, but the player is 2.5 pixels away, 
+        // the velocity would be set to 2.5
+        this.xVelocity = clamp(chaseVector.unit().x * chaseSpeed, -Math.abs(chaseDistX), Math.abs(chaseDistX));
+        this.yVelocity = clamp(chaseVector.unit().y * chaseSpeed, -Math.abs(chaseDistY), Math.abs(chaseDistY));
+    }
+    keepDistance(speed, dist){
+        //Same as chase, but the enemy will stop moving if it gets within a certain distance from the player
+        const chaseSpeed = speed;
+        const chaseDistX = player.x - this.x;
+        const chaseDistY = player.y - this.y;
+        const chaseVector = new Vector(chaseDistX, chaseDistY);
+        if (chaseVector.magnitude > dist){
+            const stableDistX = player.x - this.x - chaseVector.unit().x * dist;
+            const stableDistY = player.y - this.y - chaseVector.unit().y * dist;
+            this.xVelocity = clamp(chaseVector.unit().x * chaseSpeed, -Math.abs(stableDistX), Math.abs(stableDistX));
+            this.yVelocity = clamp(chaseVector.unit().y * chaseSpeed, -Math.abs(stableDistY), Math.abs(stableDistY));
+        }
+        else{
+            this.xVelocity = 0;
+            this.yVelocity = 0;
+        }
+    }
+    noMovement(){
+        this.xVelocity = 0;
+        this.yVelocity = 0;
+    }
+    basicShoot(damage, speed, lifetime, radius){
+        if (new Date() - this.lastBulletCycle > this.bulletCycleTime){
+            labyrinth.createBullet(new BasicBullet(this.x, this.y, player, damage, speed, lifetime, radius, this));
+            this.lastBulletCycle = new Date();
+        }
+    }
+    predicationShoot(damage, speed, lifetime, radius, target){
+        //not working yet
+        if (new Date() - this.lastBulletCycle > this.bulletCycleTime){
+            labyrinth.createBullet(new BasicBullet(this.x, this.y, player, damage, speed, lifetime, radius, this));
+            this.lastBulletCycle = new Date();
+        }
+    }
+    multiShotCircular(damage, speed, lifetime, radius, bulletCount){
+        //Shoots equally spaced circles around the enemy
+        const currentTime = new Date();
+        if (currentTime - this.lastBulletCycle > this.bulletCycleTime){
+            for (let j = 0; j < bulletCount; j ++){
+                labyrinth.createBullet(new AngleBullet(this.x, this.y, j * (2 * Math.PI / bulletCount), 10, this));
+            }
+            this.lastBulletCycle = new Date();
+        }
+    }
+    multiShotAimed(damage, speed, lifetime, radius, bulletCount, spread){
+        //Shoots a spread of bullets with the center aimed at the player
+        //If an even amount of bullets is shot, no bullet will be on a direct collision course with the player
+        const currentTime = new Date();
+        if (currentTime - this.lastBulletCycle > this.bulletCycleTime){
+            const spreadRad = spread * Math.PI / 180;
+            const playerAngle = Math.atan2(player.y - this.y, player.x - this.x);
+            for (let j = 0; j < bulletCount; j ++){
+                labyrinth.createBullet(new AngleBullet(this.x, this.y, playerAngle + spreadRad * (j - (bulletCount-1)/2), damage, speed, lifetime, radius, this));
+            }
+            this.lastBulletCycle = new Date();
+        }
+    }
+    cycle(cycleParam){
+        if(!cycleParam.hasOwnProperty("behaviors") || 
+        !cycleParam.hasOwnProperty("behaviorParams") ||
+        !cycleParam.hasOwnProperty("behaviorCycleTimes")
+        ){
+            throw "cycleParam does not have all necessary properties";
+        }
+        if (this.behaviorCycleBegin === undefined){
+            this.behaviorCycleBegin = new Date();
+            this.currentBehavior = 0;
+        }
+        let currentTime = new Date();
+        if (currentTime - this.behaviorCycleBegin > cycleParam.behaviorCycleTimes[this.currentBehavior]){
+            this.currentBehavior +=1;
+            if(this.currentBehavior >= cycleParam.behaviors.length){
+                this.currentBehavior = 0;
+            }
+            this.behaviorCycleBegin = new Date();
+        }
+        let currentBehavior = cycleParam.behaviors[this.currentBehavior];
+        let currentBehaviorParam = cycleParam.behaviorParams[this.currentBehavior];
+        currentBehavior.apply(this, currentBehaviorParam);
+    }
+}
+class Zombie extends Enemy{
+    constructor(x, y, hpMod, damageMod, speedMod){
+        super(x, y, 5, hpMod);
+        this.bulletCycleTime = 500;
+        this.behavior = this.chase;
+        this.behaviorParam = [2];
+        this.bulletBehavior = this.basicShoot;
+        this.bulletBehaviorParam = [10, 3, 10000, 15];
+        this.radius = 10;
+        this.symbol = "z";
+        this.idleSpeedVector = {x: 2, y: 2};
+    }
+    static get score(){
+        return 1;
+    }
+}
+class Sentry extends Enemy{
+    //Stays still and shoots a spread of bullets at the player
+    constructor(x, y, hpMod){
+        super(x, y, 10, hpMod);
+        this.bulletCycleTime = 1000;
+        this.behavior = this.noMovement;
+        this.bulletBehavior = this.multiShotAimed;
+        this.bulletBehaviorParam = [10, 8, 7000/2, 7, 3, 15];
+        this.radius = 10;
+        this.symbol = "S";
+        this.idleSpeedVector = {x: 0, y: 0};
+    }
+    static get score(){
+        return 2;
+    }
+}
+class Bull extends Enemy{
+    //Will cycle between standing still and charging the player
+    constructor(x, y, hpMod){
+        super(x, y, 5, hpMod);
+        this.bulletCycleTime = 100;
+        this.behavior = this.cycle;
+        this.behaviorParam = [{
+            behaviors: [this.noMovement, this.keepDistance],
+            behaviorParams: [[],[5, 30]],
+            behaviorCycleTimes: [1500, 1500]
+        }];
+        this.bulletBehavior = this.multiShotAimed;
+        this.bulletBehaviorParam = [1, 10, 100, 4, 5, 10];
+        this.radius = 10;
+        this.symbol = "b";
+        this.idleSpeedVector = {x: 2, y: 2};
+    }
+    update(){
+        super.update();
+    }
+    static get score(){
+        return 4;
+    }
+}
+class Librarian extends Enemy{
+    constructor(x, y, hpMod){
+
+    }
+}
+class Bullet extends Circle{
+    //Base class for bullets
+    constructor(x, y, xVelocity, yVelocity, damage, speed, lifetime, radius, creator){
+        super(x, y);
+        this.xVelocity = xVelocity;
+        this.yVelocity = yVelocity;
+        this.damage = damage;
+        this.speed = speed;
+        this.lifetime = lifetime;
+        this.radius = radius;
+        this.creator = creator;
+        this.faction = creator.constructor.faction;
+        this.lifeStart = new Date();
+        this.behavior = this.linear;
+        this.alive = true;
+    }
+    update(){        
+        super.update();
+        this.behavior();
+        this.lifeDecay();
+    }
+    draw(){
+        super.draw();
+    }
+    lifeDecay(){
+        const currentTime = new Date();
+        if (currentTime - this.lifeStart > this.lifetime){
+            this.alive = false;
+        }
+    }
+    linear(){
+        function mapBorderCheckCallback(){
+            this.alive = false;
+        }
+        this.wallCollisionBehavior[Direction.LEFT] = mapBorderCheckCallback;
+        this.wallCollisionBehavior[Direction.RIGHT]= mapBorderCheckCallback;
+        this.wallCollisionBehavior[Direction.UP] = mapBorderCheckCallback;
+        this.wallCollisionBehavior[Direction.DOWN] = mapBorderCheckCallback;
+    }
+    collisionCheck(object){
+        if ((this.x - object.x)**2 + (this.y - object.y)**2 <= (this.radius + object.radius)**2 &&
+            (this.faction != object.faction))
+        {
+            console.log("hit");
+            object.hp -= this.damage;
+            object.lastHit = this.creator.constructor.name;
+            this.alive = false;
+        }
+    }
+}
+class BasicBullet extends Bullet{
+    //Uses a vector/anything with an x and y value for targeting. 
+    constructor(x, y, target, damage, speed, lifetime, radius, creator){
+        super(x, y, 0, 0, damage, speed, lifetime, radius, creator);
+        this.target = target;
+        this.calculateVelocity();
+    }
+    calculateVelocity(){
+        let targetVector = new Vector(this.target.x - this.x, this.target.y - this.y);
+        if (targetVector.magnitude === 0){
+            targetVector = new Vector(Math.random() - 0.5, Math.random() - 0.5);
+        }
+        this.xVelocity = targetVector.unit().x * this.speed;
+        this.yVelocity = targetVector.unit().y * this.speed;
+    }
+    update(){
+        super.update();
+    }
+    draw(){
+        super.draw();
+    }
+}
+class AngleBullet extends Bullet{
+    //Uses an angle in radians for targeting
+    constructor(x, y, angle, damage, speed, lifetime, radius, creator){
+        super(x, y, 0, 0, damage, speed, lifetime, radius, creator);
+        this.angle = angle;
+        this.faction = creator.constructor.faction;
+        this.calculateVelocity();
+    }
+    calculateVelocity(){
+        this.xVelocity = Math.cos(this.angle) * this.speed;
+        this.yVelocity = Math.sin(this.angle) * this.speed;
+    }
+    draw(){
+        super.draw();
+    }
+}
+
+
+
 
 class GameMap {
     //This is used in case the moveable area is less than the size of the canvas
@@ -625,9 +698,9 @@ class Room {
         let enemyConstructorList = [];
         let enemyList = [];
         const currentMaxScore = Math.min(roomScore, maxScore)
-        let enemyTotalScore = Math.ceil(0.5 * currentMaxScore + Math.random() * currentMaxScore);
+        let enemyTotalScore = Math.ceil(0.5 * currentMaxScore + Math.random() * currentMaxScore/2);
         roomScore -= enemyTotalScore;
-        while (enemyList.length < maxEnemyCount + 1 && enemyTotalScore > 0){
+        while (enemyConstructorList.length < maxEnemyCount && enemyTotalScore > 0){
             //Randomly creates enemies
             let scoreRoll = Math.ceil(currentMaxScore * (Math.random() ** ((enemyConstructorList.length + 1)/2)));
             //The exponent increases the likelyhood of selecting a stronger enemy for the first 3 enemies
@@ -945,11 +1018,13 @@ function keyUpCheck(e) {
     }
 }
 function mouseDown(e){
-    controller.e = e;
     controller.mouse = true;
 }
 function mouseUp(e){
     controller.mouse = false;
+}
+function mouseMove(e){
+    controller.e = e;
 }
 let gameMap = new GameMap();
 const canvas = document.createElement("canvas");
@@ -957,15 +1032,14 @@ canvas.id = "gameCanvas";
 canvas.width = gameMap.width;
 canvas.height = gameMap.height;
 const ctx = canvas.getContext("2d");
+
 document.body.appendChild(canvas);
 document.onkeydown = keyDownCheck;
 document.onkeyup = keyUpCheck;
 document.onmousedown = mouseDown;
 document.onmouseup = mouseUp;
-let GlobalEnemyList = [Zombie];
-//EnemyScores contains EnemyScore objects which has an enemy constructor and the score value of that enemy
-//EnemyScoreList just contains an array of enemyscores
-//Confusing, I know
+document.onmousemove = mouseMove;
+let GlobalEnemyList = [Zombie, Sentry, Bull];
 let player = new Player();
 let controller = new Controller();
 let camera = new Camera();
